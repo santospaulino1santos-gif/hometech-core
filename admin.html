@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin · HOMETECH-Core</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<!-- TOPO -->
+<header class="topo">
+  <div class="topo-left">
+    <img src="logo.jpg" class="logo" alt="HOMETECH-Core">
+    <h1>HOMETECH-Core</h1>
+  </div>
+  <span class="topo-badge">Painel Admin</span>
+</header>
+
+<!-- LOGIN -->
+<div id="login">
+  <form onsubmit="return false;">
+    <div class="login-logo">HOMETECH-Core</div>
+   <mark> <h2>ACESSO RESTRITO</h2></mark>
+    <input type="password" id="senha" placeholder="Senha de acesso"
+      onkeydown="if(event.key==='Enter') entrar()">
+    <div id="erro-login" class="erro-login" style="display:none;"></div>
+    <button type="button" onclick="entrar()">Entrar</button>
+  </form>
+</div>
+
+<!-- PAINEL -->
+<div id="painel" style="display:none;">
+
+  <div class="welcome-msg">Bem-vindo, Nhongista Alexandre</div>
+
+  <h2>Adicionar Produto</h2>
+
+  <input id="nome" placeholder="Nome do produto">
+  <input id="preco" placeholder="Preço (MT)" type="number">
+  <input id="descricao" placeholder="Descrição breve">
+
+  <select id="categoria" onchange="toggleSubcatAdmin(this.value)">
+    <option value="Smartphone">Smartphone</option>
+    <option value="Laptop">Laptop</option>
+    <option value="Desktop">Desktop</option>
+    <option value="Outros">Outros</option>
+    <option value="Segunda Mao">Segunda Mão</option>
+  </select>
+
+  <!-- Subcategoria — só aparece quando Segunda Mão selecionado -->
+  <select id="subcategoria" style="display:none;">
+    <option value="Celular">Celular</option>
+    <option value="Laptop">Laptop</option>
+    <option value="Desktop">Desktop</option>
+    <option value="Outros">Outros</option>
+  </select>
+
+  <label class="upload-box">
+    📷 Escolher Imagem
+    <input id="imagem" type="file" accept="image/*" hidden>
+  </label>
+
+  <button type="button" onclick="addProduto()">Adicionar Produto</button>
+
+  <hr>
+
+  <h2>Anúncios em Vídeo</h2>
+
+  <label class="upload-box">
+    🎥 Escolher Vídeo
+    <input id="video" type="file" accept="video/*" hidden>
+  </label>
+
+  <textarea id="video-anuncio" placeholder="Texto do anúncio (ex: iPhone 14 Pro · 128GB · Como novo · 45.000 MT)"></textarea>
+
+  <button type="button" onclick="addVideo()">Publicar Anúncio</button>
+
+  <div id="admin-videos-lista" style="margin-top:16px;"></div>
+
+  <hr>
+
+  <h2>Produtos publicados</h2>
+  <button class="danger" onclick="eliminarSelecionados()">Eliminar Selecionados</button>
+  <div id="admin-lista"></div>
+
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
