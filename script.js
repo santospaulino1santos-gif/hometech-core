@@ -1,21 +1,41 @@
 /********************
+ CLOUDINARY CONFIG
+********************/
+const CLOUD_NAME   = "bsdxxatl";
+const UPLOAD_PRESET = "bp54kz7y";
+
+/********************
+ FIREBASE CONFIG
+********************/
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAOXhE5N_qCHjOGVlfwKYI0lGNN-P2Jl8c",
+  authDomain: "hometech-core.firebaseapp.com",
+  projectId: "hometech-core",
+  storageBucket: "hometech-core.firebasestorage.app",
+  messagingSenderId: "876868197985",
+  appId: "1:876868197985:web:9651608d3f1f7363d61420"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+
+/********************
  BASE DE DADOS
 ********************/
-let produtos = JSON.parse(localStorage.getItem("produtos")) || [];
-let videos   = JSON.parse(localStorage.getItem("videos"))   || [];
+let produtos     = [];
+let videos       = [];
 let selecionados = [];
 
 /********************
  LOGIN ADMIN — HASH SHA-256
- Para mudar a senha:
-   1. Vai a: https://emn178.github.io/online-tools/sha256.html
-   2. Escreve a tua senha e copia o hash gerado
-   3. Substitui o valor de SENHA_HASH abaixo
 ********************/
-const SENHA_HASH = "78524f69cfd78e03bda23248b00f0fd5822de1de2851226594644591f5a428c3"; // hash de "1234"
+const SENHA_HASH = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"; // hash de "1234"
 let tentativas = 0;
-const MAX_TENTATIVAS = 4;
-const BLOQUEIO_MS = 30000; // 30 segundos
+const MAX_TENTATIVAS = 3;
+const BLOQUEIO_MS = 30000;
 
 async function hashSHA256(texto) {
   const encoder = new TextEncoder();
@@ -26,7 +46,6 @@ async function hashSHA256(texto) {
 }
 
 async function entrar() {
-  // verificar bloqueio ativo
   let bloqueadoAte = parseInt(sessionStorage.getItem("bloqueadoAte") || "0");
   if (Date.now() < bloqueadoAte) {
     let seg = Math.ceil((bloqueadoAte - Date.now()) / 1000);
@@ -40,18 +59,15 @@ async function entrar() {
   let hash = await hashSHA256(senha);
 
   if (hash === SENHA_HASH) {
-    // sucesso — limpar tentativas
     tentativas = 0;
     sessionStorage.removeItem("bloqueadoAte");
     sessionStorage.setItem("adminOk", "1");
-
     document.getElementById("login").style.display = "none";
     document.getElementById("painel").style.display = "block";
     mostrarAdmin();
   } else {
     tentativas++;
     let restam = MAX_TENTATIVAS - tentativas;
-
     if (tentativas >= MAX_TENTATIVAS) {
       tentativas = 0;
       sessionStorage.setItem("bloqueadoAte", Date.now() + BLOQUEIO_MS);
@@ -69,11 +85,55 @@ function mostrarErroLogin(msg) {
   el.style.display = "block";
 }
 
-// bloquear acesso direto ao painel via URL
-window.addEventListener("DOMContentLoaded", function () {
+window.addEventListener("DOMContentLoaded", async function () {
   let painel = document.getElementById("painel");
   if (painel) painel.style.display = "none";
+  await carregarDados();
 });
+
+/********************
+ CARREGAR DADOS DO FIRESTORE
+********************/
+async function carregarDados() {
+  try {
+    // Produtos
+    const prodSnap = await getDocs(collection(db, "produtos"));
+    produtos = [];
+    prodSnap.forEach(d => produtos.push({ id: d.id, ...d.data() }));
+
+    // Vídeos
+    const vidSnap = await getDocs(collection(db, "videos"));
+    videos = [];
+    vidSnap.forEach(d => videos.push({ id: d.id, ...d.data() }));
+
+    mostrarProdutos();
+    mostrarVideos();
+    mostrarAdmin();
+    mostrarAdminVideos();
+  } catch (e) {
+    console.error("Erro ao carregar dados:", e);
+  }
+}
+
+/********************
+ UPLOAD PARA CLOUDINARY
+********************/
+async function uploadCloudinary(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", UPLOAD_PRESET);
+
+  const resourceType = file.type.startsWith("video") ? "video" : "image";
+
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/upload`, {
+    method: "POST",
+    body: formData
+  });
+
+  const data = await res.json();
+  if (!data.secure_url) throw new Error("Falha no upload");
+  return data.secure_url;
+}
 
 /********************
  SUBCATEGORIA ADMIN
@@ -87,14 +147,13 @@ function toggleSubcatAdmin(val) {
 /********************
  ADICIONAR PRODUTO
 ********************/
-function addProduto() {
+async function addProduto() {
   let nome      = document.getElementById("nome").value.trim();
   let preco     = document.getElementById("preco").value.trim();
   let descricao = document.getElementById("descricao").value.trim();
   let categoria = document.getElementById("categoria").value;
   let file      = document.getElementById("imagem").files[0];
 
-  // subcategoria só se for Segunda Mão
   let subcategoria = "";
   let subEl = document.getElementById("subcategoria");
   if (categoria === "Segunda Mao" && subEl) {
@@ -106,19 +165,26 @@ function addProduto() {
     return;
   }
 
-  let reader = new FileReader();
-  reader.onload = function (e) {
-    produtos.push({
+  try {
+    // Mostrar progresso
+    alert("A fazer upload da imagem, aguarda...");
+
+    // 1. Upload da imagem para Cloudinary
+    const imagemURL = await uploadCloudinary(file);
+
+    // 2. Guardar dados no Firestore
+    const docRef = await addDoc(collection(db, "produtos"), {
       nome,
       preco: Number(preco),
       descricao,
       categoria,
       subcategoria,
-      imagem: e.target.result,
+      imagem: imagemURL,
       vendido: ""
     });
 
-    localStorage.setItem("produtos", JSON.stringify(produtos));
+    produtos.push({ id: docRef.id, nome, preco: Number(preco), descricao, categoria, subcategoria, imagem: imagemURL, vendido: "" });
+
     mostrarProdutos();
     mostrarAdmin();
 
@@ -126,17 +192,20 @@ function addProduto() {
     document.getElementById("preco").value     = "";
     document.getElementById("descricao").value = "";
     document.getElementById("imagem").value    = "";
-  };
-  reader.readAsDataURL(file);
+
+    alert("Produto adicionado com sucesso!");
+  } catch (e) {
+    alert("Erro ao adicionar produto: " + e.message);
+    console.error(e);
+  }
 }
 
 /********************
  COMPRAR
 ********************/
 function comprar(nome, preco) {
-  let numero = "258849042071";
-  let msg = `Olá, gostei do produto estou interessado *${nome}* (${preco} MT) e quero comprar. Onde nos podemos encontrar?. 
-  mensagem vinda do site`;
+  let numero = "258841246830";
+  let msg = `Olá, gostei do produto *${nome}* (${preco} MT) e quero comprar. Onde nos podemos encontrar?`;
   window.open("https://wa.me/" + numero + "?text=" + encodeURIComponent(msg), "_blank");
 }
 
@@ -165,7 +234,7 @@ function mostrarProdutos(lista = produtos) {
 
     container.innerHTML += `
       <div class="card ${p.vendido ? 'vendido' : ''}">
-        <div class="card-img-wrap" onclick="abrirLightbox('${p.imagem.replace(/'/g,"\\'")}', '${p.nome.replace(/'/g,"\\'")}')">
+        <div class="card-img-wrap" onclick="abrirLightbox('${p.imagem}', '${p.nome.replace(/'/g,"\\'")}')">
           <img src="${p.imagem}" alt="${p.nome}">
           <span class="card-cat">${catLabel}</span>
           <span class="img-zoom-hint">🔍</span>
@@ -209,11 +278,9 @@ document.addEventListener("keydown", function(e) {
  FILTRAR
 ********************/
 function filtrar(cat, btn) {
-  // botão ativo
   document.querySelectorAll('.cats button').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
 
-  // subcats
   let subcats = document.getElementById("subcats");
   if (subcats) subcats.style.display = cat === "Segunda Mao" ? "flex" : "none";
 
@@ -225,15 +292,12 @@ function filtrar(cat, btn) {
 }
 
 /********************
- FILTRAR SUBCATEGORIA (SEGUNDA MÃO)
+ FILTRAR SUBCATEGORIA
 ********************/
 function filtrarSub(cat, sub, btn) {
   document.querySelectorAll('.subcats button').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
-
-  mostrarProdutos(
-    produtos.filter(p => p.categoria === cat && p.subcategoria === sub)
-  );
+  mostrarProdutos(produtos.filter(p => p.categoria === cat && p.subcategoria === sub));
 }
 
 /********************
@@ -241,10 +305,7 @@ function filtrarSub(cat, sub, btn) {
 ********************/
 function pesquisar(termo) {
   termo = termo.toLowerCase().trim();
-  if (!termo) {
-    mostrarProdutos();
-    return;
-  }
+  if (!termo) { mostrarProdutos(); return; }
   let resultado = produtos.filter(p =>
     p.nome.toLowerCase().includes(termo) ||
     p.descricao.toLowerCase().includes(termo) ||
@@ -264,11 +325,11 @@ function scrollToProdutos() {
 /********************
  SELECIONAR
 ********************/
-function selecionar(i) {
-  if (selecionados.includes(i)) {
-    selecionados = selecionados.filter(x => x !== i);
+function selecionar(id) {
+  if (selecionados.includes(id)) {
+    selecionados = selecionados.filter(x => x !== id);
   } else {
-    selecionados.push(i);
+    selecionados.push(id);
   }
   mostrarAdmin();
 }
@@ -276,26 +337,38 @@ function selecionar(i) {
 /********************
  ELIMINAR SELECIONADOS
 ********************/
-function eliminarSelecionados() {
+async function eliminarSelecionados() {
   if (selecionados.length === 0) { alert("Nenhum produto selecionado"); return; }
   if (!confirm(`Eliminar ${selecionados.length} produto(s)?`)) return;
 
-  produtos = produtos.filter((_, i) => !selecionados.includes(i));
-  selecionados = [];
-  localStorage.setItem("produtos", JSON.stringify(produtos));
-  mostrarProdutos();
-  mostrarAdmin();
+  try {
+    for (let id of selecionados) {
+      await deleteDoc(doc(db, "produtos", id));
+    }
+    produtos = produtos.filter(p => !selecionados.includes(p.id));
+    selecionados = [];
+    mostrarProdutos();
+    mostrarAdmin();
+  } catch (e) {
+    alert("Erro ao eliminar: " + e.message);
+  }
 }
 
 /********************
  SALVAR VENDIDO
 ********************/
-function salvarVendido(i) {
-  let input = document.getElementById(`vendido-${i}`);
-  produtos[i].vendido = input.value.trim();
-  localStorage.setItem("produtos", JSON.stringify(produtos));
-  mostrarProdutos();
-  mostrarAdmin();
+async function salvarVendido(id) {
+  let input = document.getElementById(`vendido-${id}`);
+  let valor = input.value.trim();
+  try {
+    await updateDoc(doc(db, "produtos", id), { vendido: valor });
+    let p = produtos.find(x => x.id === id);
+    if (p) p.vendido = valor;
+    mostrarProdutos();
+    mostrarAdmin();
+  } catch (e) {
+    alert("Erro ao guardar: " + e.message);
+  }
 }
 
 /********************
@@ -311,8 +384,8 @@ function mostrarAdmin() {
     return;
   }
 
-  produtos.forEach((p, i) => {
-    let sel = selecionados.includes(i) ? "selecionado" : "";
+  produtos.forEach((p) => {
+    let sel = selecionados.includes(p.id) ? "selecionado" : "";
     let catLabel = p.categoria === "Segunda Mao"
       ? `2ª Mão · ${p.subcategoria || ""}`
       : p.categoria;
@@ -325,10 +398,10 @@ function mostrarAdmin() {
         </div>
         <h3>${p.nome}</h3>
         <p style="font-size:12px; color:#7a8499;">${p.preco.toLocaleString('pt-MZ')} MT</p>
-        <input id="vendido-${i}" value="${p.vendido || ""}" placeholder="ex: Vendido / Esgotado"/>
-        <button onclick="salvarVendido(${i})">Guardar</button>
-        <button onclick="selecionar(${i})" class="${selecionados.includes(i) ? 'danger' : ''}">
-          ${selecionados.includes(i) ? 'Remover seleção' : 'Selecionar'}
+        <input id="vendido-${p.id}" value="${p.vendido || ""}" placeholder="ex: Vendido / Esgotado"/>
+        <button onclick="salvarVendido('${p.id}')">Guardar</button>
+        <button onclick="selecionar('${p.id}')" class="${selecionados.includes(p.id) ? 'danger' : ''}">
+          ${selecionados.includes(p.id) ? 'Remover seleção' : 'Selecionar'}
         </button>
       </div>`;
   });
@@ -337,40 +410,56 @@ function mostrarAdmin() {
 /********************
  VÍDEOS
 ********************/
-function addVideo() {
+async function addVideo() {
   let file    = document.getElementById("video").files[0];
   let anuncio = document.getElementById("video-anuncio").value.trim();
 
   if (!file) { alert("Escolhe um ficheiro de vídeo"); return; }
 
-  let reader = new FileReader();
-  reader.onload = function (e) {
-    videos.push({ src: e.target.result, anuncio: anuncio });
-    localStorage.setItem("videos", JSON.stringify(videos));
+  try {
+    alert("A fazer upload do vídeo, aguarda... (pode demorar)");
+
+    // 1. Upload do vídeo para Cloudinary
+    const videoURL = await uploadCloudinary(file);
+
+    // 2. Guardar no Firestore
+    const docRef = await addDoc(collection(db, "videos"), {
+      src: videoURL,
+      anuncio: anuncio
+    });
+
+    videos.push({ id: docRef.id, src: videoURL, anuncio });
     mostrarVideos();
     mostrarAdminVideos();
-    document.getElementById("video").value        = "";
+
+    document.getElementById("video").value         = "";
     document.getElementById("video-anuncio").value = "";
-  };
-  reader.readAsDataURL(file);
+
+    alert("Vídeo publicado com sucesso!");
+  } catch (e) {
+    alert("Erro ao publicar vídeo: " + e.message);
+    console.error(e);
+  }
 }
 
-function eliminarVideo(i) {
+async function eliminarVideo(id) {
   if (!confirm("Eliminar este anúncio?")) return;
-  videos.splice(i, 1);
-  localStorage.setItem("videos", JSON.stringify(videos));
-  mostrarVideos();
-  mostrarAdminVideos();
+  try {
+    await deleteDoc(doc(db, "videos", id));
+    videos = videos.filter(v => v.id !== id);
+    mostrarVideos();
+    mostrarAdminVideos();
+  } catch (e) {
+    alert("Erro ao eliminar vídeo: " + e.message);
+  }
 }
 
 function mostrarVideos() {
   let container = document.getElementById("videos");
   if (!container) return;
-
   container.innerHTML = "";
 
-  let lista = videos.map(v => typeof v === "string" ? { src: v, anuncio: "" } : v);
-  if (lista.length === 0) {
+  if (videos.length === 0) {
     let label = document.getElementById("videos-label");
     if (label) label.style.display = "none";
     return;
@@ -379,7 +468,7 @@ function mostrarVideos() {
   let label = document.getElementById("videos-label");
   if (label) label.style.display = "flex";
 
-  lista.forEach(v => {
+  videos.forEach(v => {
     container.innerHTML += `
       <div class="video-card">
         ${v.anuncio ? `<div class="video-anuncio-topo">📢 ${v.anuncio}</div>` : ""}
@@ -393,7 +482,6 @@ function mostrarVideos() {
 function mostrarAdminVideos() {
   let container = document.getElementById("admin-videos-lista");
   if (!container) return;
-
   container.innerHTML = "";
 
   if (videos.length === 0) {
@@ -401,23 +489,14 @@ function mostrarAdminVideos() {
     return;
   }
 
-  let lista = videos.map(v => typeof v === "string" ? { src: v, anuncio: "" } : v);
-
-  lista.forEach((v, i) => {
+  videos.forEach((v) => {
     container.innerHTML += `
       <div class="admin-video-item">
         <video controls>
           <source src="${v.src}">
         </video>
         ${v.anuncio ? `<p class="admin-video-anuncio">📢 ${v.anuncio}</p>` : ""}
-        <button class="danger" onclick="eliminarVideo(${i})">🗑 Eliminar</button>
+        <button class="danger" onclick="eliminarVideo('${v.id}')">🗑 Eliminar</button>
       </div>`;
   });
 }
-
-/********************
- INIT
-********************/
-mostrarProdutos();
-mostrarVideos();
-mostrarAdminVideos();
