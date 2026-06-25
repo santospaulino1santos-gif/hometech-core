@@ -204,8 +204,9 @@ async function addProduto() {
  COMPRAR
 ********************/
 function comprar(nome, preco) {
-  let numero = "258841246830";
-  let msg = `Olá, gostei do produto *${nome}* (${preco} MT) e quero comprar. Onde nos podemos encontrar?`;
+  let numero = "258849042071";
+  let msg = `Olá, gostei do produto *${nome}* (${preco} MT) e quero comprar. Onde nos podemos encontrar?
+  mensagem vinda do site hometech`;
   window.open("https://wa.me/" + numero + "?text=" + encodeURIComponent(msg), "_blank");
 }
 
