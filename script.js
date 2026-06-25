@@ -500,3 +500,23 @@ function mostrarAdminVideos() {
       </div>`;
   });
 }
+
+/********************
+ EXPOR FUNÇÕES GLOBALMENTE
+ (necessário com type="module")
+********************/
+window.entrar              = entrar;
+window.toggleSubcatAdmin   = toggleSubcatAdmin;
+window.addProduto          = addProduto;
+window.comprar             = comprar;
+window.filtrar             = filtrar;
+window.filtrarSub          = filtrarSub;
+window.pesquisar           = pesquisar;
+window.scrollToProdutos    = scrollToProdutos;
+window.selecionar          = selecionar;
+window.eliminarSelecionados = eliminarSelecionados;
+window.salvarVendido       = salvarVendido;
+window.addVideo            = addVideo;
+window.eliminarVideo       = eliminarVideo;
+window.abrirLightbox       = abrirLightbox;
+window.fecharLightbox      = fecharLightbox;
