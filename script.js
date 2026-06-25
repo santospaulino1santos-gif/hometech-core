@@ -32,7 +32,7 @@ let selecionados = [];
 /********************
  LOGIN ADMIN — HASH SHA-256
 ********************/
-const SENHA_HASH = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"; // hash de "1234"
+const SENHA_HASH = "f73302eb00d29a4f54a88e780fbe2dc7df8b51f04c30f145bf60e6ee04b8f96d"; // hash de "1234"
 let tentativas = 0;
 const MAX_TENTATIVAS = 3;
 const BLOQUEIO_MS = 30000;
